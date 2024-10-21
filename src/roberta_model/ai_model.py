@@ -2,7 +2,7 @@ from haystack.nodes import FARMReader, BM25Retriever
 from haystack.document_stores import InMemoryDocumentStore
 from haystack.pipelines import ExtractiveQAPipeline
 from transformers import AutoModelForQuestionAnswering, AutoTokenizer
-from ffi_content import my_contents
+from roberta_model.ffi_content import my_contents
 
 # Define global variables for the retriever and pipeline
 document_store = None

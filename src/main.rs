@@ -1,8 +1,10 @@
 use actix_cors::Cors;
 use actix_web::{get, http, post, web::Json, App, HttpResponse, HttpServer, Responder};
 use models::QuestionAnswer;
+use roberta_model::load_ai_model::load_roberta_model;
 
 pub mod models;
+pub mod roberta_model;
 
 #[get("get_test")]
 pub async fn get_test() -> impl Responder {
@@ -30,6 +32,9 @@ pub async fn get_question_answer(data: Json<QuestionAnswer>) -> impl Responder {
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     println!("Hello, Steve!");
+    load_roberta_model();
+    println!("cargo:rustc-link-lib=your_library_name");
+
     HttpServer::new(|| {
         App::new()
             .wrap(
