@@ -348,11 +348,11 @@ pub async fn done_goal_read_one(data: Json<SearchGoal>) -> impl Responder {
     let created_done_goal = read_one_done_goal(one_done_goal);
     match created_done_goal {
         Ok(created_data) => {
-            let return_data = SuccessReadOne {
-                success: true,
-                data: created_data,
-            };
-            HttpResponse::Ok().json(return_data)
+            // let return_data = SuccessReadOne {
+            //     success: true,
+            //     data: created_data,
+            // };
+            HttpResponse::Ok().json(&created_data)
         }
         Err(e) => {
             let return_data = ErrorReturn {
@@ -482,7 +482,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(
                 Cors::default()
                     .allowed_origin("http://localhost:4200")
-                    .allowed_origin("http://192.168.137.210:10000")
+                    .allowed_origin("http://localhost:45029")
                     .allowed_methods(vec!["GET", "POST", "DELETE", "PATCH"])
                     .allowed_headers(vec![
                         http::header::AUTHORIZATION,
