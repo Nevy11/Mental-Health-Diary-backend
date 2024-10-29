@@ -97,3 +97,39 @@ pub struct Claims {
     pub sub: String,
     pub exp: usize,
 }
+
+#[derive(Insertable, Selectable, Queryable, Deserialize, Debug, Serialize)]
+#[diesel(table_name = crate::schema::goals_done)]
+#[diesel(check_for_backend(Pg))]
+pub struct GoalsDone {
+    pub id: i32,
+    pub username: String,
+    pub goal_name: String,
+}
+
+#[derive(Insertable, Deserialize, Debug, Serialize)]
+#[diesel(table_name = crate::schema::goals_done)]
+#[diesel(check_for_backend(Pg))]
+pub struct GoalDone {
+    pub username: String,
+    pub goal_name: String,
+}
+
+#[derive(Serialize)]
+pub struct ErrorReturn {
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Serialize)]
+pub struct SuccessReturn {
+    pub success: bool,
+    pub username: String,
+    pub goal_name: String,
+}
+
+#[derive(Serialize)]
+pub struct SuccessReadOne {
+    pub success: bool,
+    pub data: Vec<GoalsDone>,
+}

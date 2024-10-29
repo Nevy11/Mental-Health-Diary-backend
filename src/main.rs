@@ -2,13 +2,20 @@ use actix_cors::Cors;
 use actix_web::{delete, http, patch, post, web::Json, App, HttpResponse, HttpServer, Responder};
 use goals::{
     create_goal::create_goal,
-    delete_goal::delete_all_goals,
+    delete_goal::{delete_all_goals, delete_goal},
+    goals_done::{
+        create_done_goal::create_done_goal,
+        delete_done_goal::{delete_all_done_goals, delete_done_goal},
+        read_done_goal::{read_all_done_goal, read_one_done_goal},
+        update_done_goal::update_done_goal,
+    },
     read_goal::{read_all_goal, read_one_goal},
     update_goal::update_goal,
 };
 use models::{
-    ChatUsers, DeleteUserPassword, Goal, IsSuccessful, LoginChatUsers, MessageResponse, SearchGoal,
-    UpdateGoal, UpdateUserPassword, UpdateUsernameOrEmail,
+    ChatUsers, DeleteUserPassword, ErrorReturn, Goal, GoalDone, IsSuccessful, LoginChatUsers,
+    MessageResponse, SearchGoal, SuccessReadOne, SuccessReturn, UpdateGoal, UpdateUserPassword,
+    UpdateUsernameOrEmail,
 };
 use token_generation::generate_token::generate_token;
 use users::{
@@ -283,6 +290,165 @@ pub async fn goal_update(data: Json<UpdateGoal>) -> impl Responder {
     }
 }
 
+#[post("/delete_one_goal")]
+pub async fn delete_one_goal(data: Json<Goal>) -> impl Responder {
+    let user_data = Goal {
+        username: data.username.clone().to_uppercase(),
+        goal_name: data.goal_name.clone(),
+    };
+    let created_result = delete_goal(user_data);
+    match created_result {
+        Ok(created_data) => {
+            println!("Deleted: {created_data:?}");
+            let message = MessageResponse {
+                message: format!("Data is cleared"),
+            };
+            HttpResponse::Ok().json(message)
+        }
+        Err(e) => {
+            let message = MessageResponse {
+                message: e.to_string(),
+            };
+            HttpResponse::Ok().json(message)
+        }
+    }
+}
+
+#[post("/done_goal_create")]
+pub async fn done_goal_create(data: Json<GoalDone>) -> impl Responder {
+    let data_filtered = GoalDone {
+        username: data.username.to_uppercase().clone(),
+        goal_name: data.goal_name.clone(),
+    };
+    let created_done_goal = create_done_goal(data_filtered);
+    match created_done_goal {
+        Ok(created_data) => {
+            let return_data = SuccessReturn {
+                success: true,
+                username: created_data.username,
+                goal_name: created_data.goal_name,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ErrorReturn {
+                success: false,
+                message: e.to_string(),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/done_goal_read_one")]
+pub async fn done_goal_read_one(data: Json<SearchGoal>) -> impl Responder {
+    let one_done_goal = SearchGoal {
+        username: data.username.clone(),
+    };
+    let created_done_goal = read_one_done_goal(one_done_goal);
+    match created_done_goal {
+        Ok(created_data) => {
+            let return_data = SuccessReadOne {
+                success: true,
+                data: created_data,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ErrorReturn {
+                success: false,
+                message: e.to_string(),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[patch("/done_goal_update")]
+pub async fn done_goal_update(data: Json<UpdateGoal>) -> impl Responder {
+    let created_done_goal = update_done_goal(
+        data.username.clone(),
+        data.old_value.clone(),
+        data.new_value.clone(),
+    );
+    match created_done_goal {
+        Some(Ok(created_data)) => {
+            let return_data = SuccessReturn {
+                success: true,
+                username: created_data.username,
+                goal_name: created_data.goal_name,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Some(Err(e)) => {
+            let return_data = ErrorReturn {
+                success: false,
+                message: e.to_string(),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        None => {
+            let return_data = ErrorReturn {
+                success: false,
+                message: format!("Enter a valid field"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/done_goal_delete")]
+pub async fn done_goal_delete(data: Json<GoalDone>) -> impl Responder {
+    let one_done_goal = GoalDone {
+        username: data.username.clone().to_uppercase(),
+        goal_name: data.goal_name.clone(),
+    };
+
+    let created_done_goal = delete_done_goal(one_done_goal);
+    match created_done_goal {
+        Ok(created_data) => {
+            let return_data = SuccessReturn {
+                success: true,
+                username: created_data.username,
+                goal_name: created_data.goal_name,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ErrorReturn {
+                success: false,
+                message: e.to_string(),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/done_goal_delete_all")]
+pub async fn done_goal_delete_all(data: Json<SearchGoal>) -> impl Responder {
+    let one_done_goal = SearchGoal {
+        username: data.username.clone().to_uppercase(),
+    };
+
+    let created_done_goal = delete_all_done_goals(one_done_goal.username);
+    match created_done_goal {
+        Ok(created_data) => {
+            let return_data = SuccessReadOne {
+                success: true,
+                data: created_data,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ErrorReturn {
+                success: false,
+                message: e.to_string(),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let all_result = read_all_chat_user();
@@ -303,6 +469,13 @@ async fn main() -> std::io::Result<()> {
     match generate_token("user123") {
         Ok(token) => println!("Generated Token: {}", token),
         Err(e) => println!("Error: {e:?}"),
+    }
+
+    println!("\n\n Done goals: \n");
+    let done_goals = read_all_done_goal();
+    match done_goals {
+        Ok(done_goals_vec) => println!("{:?}", done_goals_vec),
+        Err(e) => println!("{e:?}"),
     }
     HttpServer::new(|| {
         App::new()
@@ -326,6 +499,11 @@ async fn main() -> std::io::Result<()> {
             .service(clear_goals)
             .service(goal_read_one)
             .service(goal_create)
+            .service(done_goal_create)
+            .service(done_goal_read_one)
+            .service(done_goal_update)
+            .service(done_goal_delete)
+            .service(done_goal_delete_all)
     })
     .bind(("127.0.0.1", 8080))?
     .run()

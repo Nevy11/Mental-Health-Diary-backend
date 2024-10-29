@@ -9,7 +9,7 @@ use crate::{
 /// This function establishes the connection with the database, searches the data from the
 /// database, if it founds, it returns the data and deletes it, but if it fails, it returns
 /// an error.
-pub fn delete_goal(data: Goals) -> Result<Goals, diesel::result::Error> {
+pub fn delete_goal(data: Goal) -> Result<Goals, diesel::result::Error> {
     let deleted_data = Goal {
         username: data.username.to_uppercase().clone(),
         goal_name: data.goal_name.clone(),

@@ -16,7 +16,12 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    chat_users,
-    goals_db,
-);
+diesel::table! {
+    goals_done (id) {
+        id -> Int4,
+        username -> Varchar,
+        goal_name -> Varchar,
+    }
+}
+
+diesel::allow_tables_to_appear_in_same_query!(chat_users, goals_db, goals_done,);
