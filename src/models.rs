@@ -63,10 +63,37 @@ pub struct DeleteUserPassword {
     pub username: String,
     pub current_password: String,
 }
-#[derive(Insertable, Selectable, Queryable, Deserialize, Debug)]
+#[derive(Insertable, Selectable, Queryable, Deserialize, Debug, Serialize)]
 #[diesel(table_name = crate::schema::goals_db)]
 #[diesel(check_for_backend(Pg))]
 pub struct Goals {
+    pub id: i32,
     pub username: String,
     pub goal_name: String,
+}
+
+#[derive(Deserialize)]
+pub struct SearchGoal {
+    pub username: String,
+}
+
+#[derive(Insertable, Deserialize, Debug, Serialize)]
+#[diesel(table_name = crate::schema::goals_db)]
+#[diesel(check_for_backend(Pg))]
+pub struct Goal {
+    pub username: String,
+    pub goal_name: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdateGoal {
+    pub username: String,
+    pub old_value: String,
+    pub new_value: String,
+}
+
+#[derive(Serialize)]
+pub struct Claims {
+    pub sub: String,
+    pub exp: usize,
 }

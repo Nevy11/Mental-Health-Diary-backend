@@ -14,6 +14,7 @@ diesel = { version = "2.2.4", features = ["chrono", "postgres"] }
 dotenvy = "0.15.7"
 hyper = { version = "1.5.0", features = ["server"] }
 json = "0.12.4"
+jsonwebtoken = "9.3.0"
 pyo3 = { version = "0.22.5", features = ["extension-module", "auto-initialize"] }
 rand = "0.8.5"
 serde = { version = "1.0.210", features = ["derive"] }

@@ -9,7 +9,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    goals_db (username) {
+    goals_db (id) {
+        id -> Int4,
         username -> Varchar,
         goal_name -> Varchar,
     }
