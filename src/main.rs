@@ -1,5 +1,13 @@
 use actix_cors::Cors;
-use actix_web::{delete, http, patch, post, web::Json, App, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    delete, get, http, patch, post, web::Json, App, HttpResponse, HttpServer, Responder,
+};
+use day_of_week::{day_month::current_day, day_time::current_month, day_year::current_year};
+use favourite_day::{
+    create_favourite_day::create_favourite_day, delete_favourite_day::delete_favourite_day,
+    read_all_favourite_day::read_all_favourite_day, read_one_favourite_day::read_one_favourite_day,
+    update_favourite_day::update_favourite_day,
+};
 use goals::{
     create_goal::create_goal,
     delete_goal::{delete_all_goals, delete_goal},
@@ -13,7 +21,9 @@ use goals::{
     update_goal::update_goal,
 };
 use models::{
-    ChatUsers, DeleteUserPassword, ErrorReturn, Goal, GoalDone, IsSuccessful, LoginChatUsers,
+    ChatUsers, CheckIfGoalExists, CurrentDay, CurrentMonth, CurrentYear, DeleteUserPassword,
+    ErrorReturn, FavouriteDay, FavouriteDayReadAllReturn, FavouriteDayReadOne, FavouriteDayReturn,
+    FavouriteDayUpdate, Goal, GoalDone, GoalUpdateReturn, IsSuccessful, LoginChatUsers,
     MessageResponse, SearchGoal, SuccessReadOne, SuccessReturn, UpdateGoal, UpdateUserPassword,
     UpdateUsernameOrEmail,
 };
@@ -27,6 +37,8 @@ use users::{
 use validator::ValidateLength;
 
 pub mod connection;
+pub mod day_of_week;
+pub mod favourite_day;
 pub mod goals;
 pub mod models;
 pub mod roberta_model;
@@ -264,28 +276,38 @@ pub async fn clear_goals(data: Json<SearchGoal>) -> impl Responder {
 
 #[patch("/goal_update")]
 pub async fn goal_update(data: Json<UpdateGoal>) -> impl Responder {
-    // let user_data = UpdateUsernameOrEmail {
-    //     username: data.username.clone().to_uppercase(),
-
-    // };
     let created_result = update_goal(
         data.username.to_uppercase().clone(),
         data.old_value.clone(),
         data.new_value.clone(),
     );
     match created_result {
-        Some(Ok(created_data)) => HttpResponse::Ok().json(created_data),
+        Some(Ok(created_data)) => {
+            let return_data = GoalUpdateReturn {
+                id: created_data.id,
+                username: created_data.username,
+                goal_name: created_data.goal_name,
+                message: format!("Success"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
         Some(Err(e)) => {
-            let message = MessageResponse {
+            let return_data = GoalUpdateReturn {
+                id: 0,
+                username: String::from(""),
+                goal_name: String::from(""),
                 message: e.to_string(),
             };
-            HttpResponse::Ok().json(message)
+            HttpResponse::Ok().json(return_data)
         }
         None => {
-            let message = MessageResponse {
-                message: String::from("Enter a valid field"),
+            let return_data = GoalUpdateReturn {
+                id: 0,
+                username: String::from(""),
+                goal_name: String::from(""),
+                message: format!("Invalid updated field"),
             };
-            HttpResponse::Ok().json(message)
+            HttpResponse::Ok().json(return_data)
         }
     }
 }
@@ -310,6 +332,88 @@ pub async fn delete_one_goal(data: Json<Goal>) -> impl Responder {
                 message: e.to_string(),
             };
             HttpResponse::Ok().json(message)
+        }
+    }
+}
+
+#[post("/check_todo_exists")]
+pub async fn check_todo_exists(data: Json<Goal>) -> impl Responder {
+    let search_data = SearchGoal {
+        username: data.username.clone(),
+    };
+    let user_result = read_one_goal(search_data);
+    let mut is_it = false;
+    match user_result {
+        Ok(user_data) => {
+            for x in user_data {
+                if data.goal_name == x.goal_name {
+                    is_it = true;
+                }
+            }
+            if is_it {
+                let return_data = CheckIfGoalExists {
+                    exists: true,
+                    message: format!(""),
+                    success: true,
+                };
+                HttpResponse::Ok().json(return_data)
+            } else {
+                let return_data = CheckIfGoalExists {
+                    exists: false,
+                    message: format!(""),
+                    success: true,
+                };
+                HttpResponse::Ok().json(return_data)
+            }
+        }
+        Err(e) => {
+            let return_data = CheckIfGoalExists {
+                exists: false,
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/check_done_exists")]
+pub async fn check_done_exists(data: Json<Goal>) -> impl Responder {
+    let search_data = SearchGoal {
+        username: data.username.clone(),
+    };
+    let user_result = read_one_done_goal(search_data);
+    let mut is_it = false;
+    match user_result {
+        Ok(user_data) => {
+            for x in user_data {
+                if data.goal_name == x.goal_name {
+                    is_it = true;
+                }
+            }
+            if is_it {
+                let return_data = CheckIfGoalExists {
+                    exists: true,
+                    message: format!("Goal matches the goal stored in the database"),
+                    success: true,
+                };
+                HttpResponse::Ok().json(return_data)
+            } else {
+                let return_data = CheckIfGoalExists {
+                    exists: false,
+                    message: format!("Data updated successfully"),
+                    success: true,
+                };
+                HttpResponse::Ok().json(return_data)
+            }
+        }
+        Err(e) => {
+            let return_data = CheckIfGoalExists {
+                exists: false,
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(return_data)
         }
     }
 }
@@ -347,13 +451,7 @@ pub async fn done_goal_read_one(data: Json<SearchGoal>) -> impl Responder {
     };
     let created_done_goal = read_one_done_goal(one_done_goal);
     match created_done_goal {
-        Ok(created_data) => {
-            // let return_data = SuccessReadOne {
-            //     success: true,
-            //     data: created_data,
-            // };
-            HttpResponse::Ok().json(&created_data)
-        }
+        Ok(created_data) => HttpResponse::Ok().json(&created_data),
         Err(e) => {
             let return_data = ErrorReturn {
                 success: false,
@@ -390,7 +488,7 @@ pub async fn done_goal_update(data: Json<UpdateGoal>) -> impl Responder {
         None => {
             let return_data = ErrorReturn {
                 success: false,
-                message: format!("Enter a valid field"),
+                message: format!("The goal entered doesn't match the available one"),
             };
             HttpResponse::Ok().json(return_data)
         }
@@ -449,6 +547,207 @@ pub async fn done_goal_delete_all(data: Json<SearchGoal>) -> impl Responder {
     }
 }
 
+#[get("day_current")]
+pub async fn day_current() -> impl Responder {
+    let day = current_day();
+    let day_return = CurrentDay { day: day };
+    HttpResponse::Ok().json(day_return)
+}
+
+#[get("month_current")]
+pub async fn month_current() -> impl Responder {
+    let month = current_month();
+    let day_return = CurrentMonth { month: month };
+    HttpResponse::Ok().json(day_return)
+}
+
+#[get("year_current")]
+pub async fn year_current() -> impl Responder {
+    let year: i32 = current_year();
+    let day_return = CurrentYear { year: year };
+    HttpResponse::Ok().json(day_return)
+}
+
+#[post("fav_day_create")]
+pub async fn fav_day_create(data: Json<FavouriteDay>) -> impl Responder {
+    let data_to_create = FavouriteDay {
+        username: data.username.clone(),
+        day_favourite: data.day_favourite.clone(),
+    };
+    let length_of_username = data_to_create.day_favourite.length();
+    if length_of_username > Some(0) {
+        let created_result = create_favourite_day(data_to_create);
+        match created_result {
+            Ok(created_data) => {
+                let data_return = FavouriteDayReturn {
+                    username: created_data.username,
+                    day_favourite: created_data.day_favourite,
+                    message: String::from(""),
+                    success: true,
+                };
+                HttpResponse::Ok().json(data_return)
+            }
+            Err(e) => {
+                println!("Error: {e:?}");
+                let update_result = update_favourite_day(
+                    data.username.clone(),
+                    String::from("DAY_FAVOURITE"),
+                    data.day_favourite.clone(),
+                );
+                match update_result {
+                    Some(Ok(updated_data)) => {
+                        let data_return = FavouriteDayReturn {
+                            username: updated_data.username,
+                            day_favourite: updated_data.day_favourite,
+                            message: format!(""),
+                            success: true,
+                        };
+                        HttpResponse::Ok().json(data_return)
+                    }
+                    Some(Err(e)) => {
+                        let data_return = FavouriteDayReturn {
+                            username: String::from(""),
+                            day_favourite: String::from(""),
+                            message: format!("{e:?}"),
+                            success: false,
+                        };
+                        HttpResponse::Ok().json(data_return)
+                    }
+                    None => {
+                        let data_return = FavouriteDayReturn {
+                            username: String::from(""),
+                            day_favourite: String::from(""),
+                            message: format!("A valid field for upgrading is required"),
+                            success: false,
+                        };
+                        HttpResponse::Ok().json(data_return)
+                    }
+                }
+            }
+        }
+    } else {
+        let data_return = FavouriteDayReturn {
+            username: String::from(""),
+            day_favourite: String::from(""),
+            message: format!("Enter a valid username"),
+            success: false,
+        };
+        HttpResponse::Ok().json(data_return)
+    }
+}
+#[post("fav_day_read_one")]
+pub async fn fav_day_read_one(data: Json<FavouriteDayReadOne>) -> impl Responder {
+    let created_result = read_one_favourite_day(data.username.clone());
+    match created_result {
+        Ok(created_data) => {
+            let data_return = FavouriteDayReturn {
+                username: created_data.username,
+                day_favourite: created_data.day_favourite,
+                message: String::from(""),
+                success: true,
+            };
+            HttpResponse::Ok().json(data_return)
+        }
+        Err(e) => {
+            let data_return = FavouriteDayReturn {
+                username: String::from(""),
+                day_favourite: String::from(""),
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(data_return)
+        }
+    }
+}
+
+#[post("fav_day_read_all")]
+pub async fn fav_day_read_all() -> impl Responder {
+    let created_result = read_all_favourite_day();
+    match created_result {
+        Ok(created_data) => {
+            let data_return = FavouriteDayReadAllReturn {
+                success: true,
+                data: created_data,
+                message: String::from(""),
+            };
+
+            HttpResponse::Ok().json(data_return)
+        }
+        Err(e) => {
+            let data = FavouriteDay {
+                username: String::from(""),
+                day_favourite: String::from(""),
+            };
+            let data_return = FavouriteDayReadAllReturn {
+                data: vec![data],
+                success: false,
+                message: format!("{e:?}"),
+            };
+            HttpResponse::Ok().json(data_return)
+        }
+    }
+}
+#[patch("fav_day_update")]
+pub async fn fav_day_update(data: Json<FavouriteDayUpdate>) -> impl Responder {
+    let created_result = update_favourite_day(
+        data.username.clone(),
+        data.field.clone(),
+        data.new_value.clone(),
+    );
+    match created_result {
+        Some(Ok(created_data)) => {
+            let data_return = FavouriteDayReturn {
+                username: created_data.username,
+                day_favourite: created_data.day_favourite,
+                message: String::from(""),
+                success: true,
+            };
+            HttpResponse::Ok().json(data_return)
+        }
+        Some(Err(e)) => {
+            let data_return = FavouriteDayReturn {
+                username: String::from(""),
+                day_favourite: String::from(""),
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(data_return)
+        }
+        None => {
+            let data_return = FavouriteDayReturn {
+                username: String::from(""),
+                day_favourite: String::from(""),
+                message: String::from("Enter a valid field"),
+                success: false,
+            };
+            HttpResponse::Ok().json(data_return)
+        }
+    }
+}
+#[post("fav_day_delete")]
+pub async fn fav_day_delete(data: Json<FavouriteDayReadOne>) -> impl Responder {
+    let created_result = delete_favourite_day(data.username.clone());
+    match created_result {
+        Ok(created_data) => {
+            let data_return = FavouriteDayReturn {
+                username: created_data.username,
+                day_favourite: created_data.day_favourite,
+                message: String::from(""),
+                success: true,
+            };
+            HttpResponse::Ok().json(data_return)
+        }
+        Err(e) => {
+            let data_return = FavouriteDayReturn {
+                username: String::from(""),
+                day_favourite: String::from(""),
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(data_return)
+        }
+    }
+}
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let all_result = read_all_chat_user();
@@ -477,12 +776,20 @@ async fn main() -> std::io::Result<()> {
         Ok(done_goals_vec) => println!("{:?}", done_goals_vec),
         Err(e) => println!("{e:?}"),
     }
+    let all_fav_days = read_all_favourite_day();
+    match all_fav_days {
+        Ok(all_data) => {
+            println!("All Favourite days: \n");
+            println!("\n{all_data:?}")
+        }
+        Err(e) => println!("{e:?}"),
+    }
     HttpServer::new(|| {
         App::new()
             .wrap(
                 Cors::default()
                     .allowed_origin("http://localhost:4200")
-                    .allowed_origin("http://localhost:45029")
+                    .allowed_origin("http://192.168.137.68:4200")
                     .allowed_methods(vec!["GET", "POST", "DELETE", "PATCH"])
                     .allowed_headers(vec![
                         http::header::AUTHORIZATION,
@@ -499,13 +806,24 @@ async fn main() -> std::io::Result<()> {
             .service(clear_goals)
             .service(goal_read_one)
             .service(goal_create)
+            .service(delete_one_goal)
             .service(done_goal_create)
             .service(done_goal_read_one)
             .service(done_goal_update)
             .service(done_goal_delete)
             .service(done_goal_delete_all)
+            .service(day_current)
+            .service(month_current)
+            .service(year_current)
+            .service(fav_day_create)
+            .service(fav_day_read_one)
+            .service(fav_day_read_all)
+            .service(fav_day_update)
+            .service(fav_day_delete)
+            .service(check_done_exists)
+            .service(check_todo_exists)
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind(("0.0.0.0", 8080))?
     .run()
     .await
 }

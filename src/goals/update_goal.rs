@@ -3,7 +3,7 @@ use diesel::prelude::*;
 use crate::{
     connection::establish_connection::establish_connection,
     models::{Goals, SearchGoal},
-    schema::goals_db::{self, goal_name, username},
+    schema::goals_db::{self, goal_name, id},
 };
 
 use super::read_goal::read_one_goal;
@@ -25,7 +25,7 @@ pub fn update_goal(
                     let connection = &mut establish_connection();
                     return Some(
                         diesel::update(goals_db::dsl::goals_db)
-                            .filter(username.eq(name_of_the_user.to_uppercase()))
+                            .filter(id.eq(goal.id))
                             .set(goal_name.eq(new_value))
                             .returning(Goals::as_returning())
                             .get_result(connection),

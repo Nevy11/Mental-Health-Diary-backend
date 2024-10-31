@@ -133,3 +133,74 @@ pub struct SuccessReadOne {
     pub success: bool,
     pub data: Vec<GoalsDone>,
 }
+
+#[derive(Serialize)]
+pub struct CurrentDay {
+    pub day: String,
+}
+
+#[derive(Serialize)]
+pub struct CurrentMonth {
+    pub month: u32,
+}
+
+#[derive(Serialize)]
+pub struct CurrentYear {
+    pub year: i32,
+}
+
+#[derive(Insertable, Deserialize, Debug, Serialize, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::favourite_day)]
+#[diesel(check_for_backend(Pg))]
+pub struct FavouriteDay {
+    pub username: String,
+    pub day_favourite: String,
+}
+
+#[derive(Serialize)]
+pub struct FavouriteDayReturn {
+    pub username: String,
+    pub day_favourite: String,
+    pub message: String,
+    pub success: bool,
+}
+
+#[derive(Deserialize)]
+pub struct FavouriteDayReadOne {
+    pub username: String,
+}
+
+#[derive(Serialize)]
+pub struct FavouriteDayReadAllReturn {
+    pub data: Vec<FavouriteDay>,
+    pub success: bool,
+    pub message: String,
+}
+
+#[derive(Deserialize)]
+pub struct FavouriteDayUpdate {
+    pub username: String,
+    pub field: String,
+    pub new_value: String,
+}
+
+#[derive(Deserialize)]
+pub struct GoalExists {
+    pub username: String,
+    pub goal_name: String,
+}
+
+#[derive(Serialize)]
+pub struct CheckIfGoalExists {
+    pub exists: bool,
+    pub message: String,
+    pub success: bool,
+}
+
+#[derive(Serialize)]
+pub struct GoalUpdateReturn {
+    pub id: i32,
+    pub username: String,
+    pub goal_name: String,
+    pub message: String,
+}

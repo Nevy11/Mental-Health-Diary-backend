@@ -9,6 +9,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    favourite_day (username) {
+        username -> Varchar,
+        day_favourite -> Varchar,
+    }
+}
+
+diesel::table! {
     goals_db (id) {
         id -> Int4,
         username -> Varchar,
@@ -24,4 +31,9 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(chat_users, goals_db, goals_done,);
+diesel::allow_tables_to_appear_in_same_query!(
+    chat_users,
+    favourite_day,
+    goals_db,
+    goals_done,
+);

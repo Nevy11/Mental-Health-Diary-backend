@@ -1,13 +1,18 @@
 use crate::{
     connection::establish_connection::establish_connection,
     models::{GoalsDone, SearchGoal},
-    schema::goals_done::{self, goal_name, username},
+    schema::goals_done::{self, goal_name, id},
 };
 use diesel::prelude::*;
 
 use super::read_done_goal::read_one_done_goal;
 
 /// This function updates the done struct
+/// Takes in the username, old_value and new_value.
+/// stores the username in a searchgoal
+/// reads one data from the username.
+/// loops over the data in the goals to obtain each goal.
+/// if the old value matches one, it updates the new
 pub fn update_done_goal(
     name_of_the_user: String,
     old_value: String,
@@ -24,13 +29,14 @@ pub fn update_done_goal(
                     let connection = &mut establish_connection();
                     return Some(
                         diesel::update(goals_done::dsl::goals_done)
-                            .filter(username.eq(name_of_the_user.to_uppercase()))
+                            .filter(id.eq(goal.id))
                             .set(goal_name.eq(new_value))
                             .returning(GoalsDone::as_returning())
                             .get_result(connection),
                     );
                 }
             }
+            println!("The old data doesn't match the new value");
             None
         }
         Err(e) => Some(Err(e)),
