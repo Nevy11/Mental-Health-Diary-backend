@@ -204,3 +204,31 @@ pub struct GoalUpdateReturn {
     pub goal_name: String,
     pub message: String,
 }
+
+#[derive(Insertable, Deserialize, Debug, Serialize, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::diary)]
+#[diesel(check_for_backend(Pg))]
+pub struct Diary {
+    pub username: String,
+    pub content: String,
+}
+
+#[derive(Serialize)]
+pub struct DiaryReturn {
+    pub username: String,
+    pub content: String,
+    pub message: String,
+    pub success: bool,
+}
+
+#[derive(Serialize)]
+pub struct DiaryExists {
+    pub exists: bool,
+    pub message: String,
+    pub success: bool,
+}
+
+#[derive(Serialize)]
+pub struct MyDate {
+    pub date: String,
+}

@@ -2,7 +2,15 @@ use actix_cors::Cors;
 use actix_web::{
     delete, get, http, patch, post, web::Json, App, HttpResponse, HttpServer, Responder,
 };
-use day_of_week::{day_month::current_day, day_time::current_month, day_year::current_year};
+use day_of_week::{
+    date::date, day_month::current_day, day_time::current_month, day_year::current_year,
+};
+use diary::{
+    create_diary::create_diary,
+    delete_diary::delete_diary,
+    read_diary::{read_all_diary_content, read_one_diary_content},
+    update_diary::update_diary,
+};
 use favourite_day::{
     create_favourite_day::create_favourite_day, delete_favourite_day::delete_favourite_day,
     read_all_favourite_day::read_all_favourite_day, read_one_favourite_day::read_one_favourite_day,
@@ -21,11 +29,11 @@ use goals::{
     update_goal::update_goal,
 };
 use models::{
-    ChatUsers, CheckIfGoalExists, CurrentDay, CurrentMonth, CurrentYear, DeleteUserPassword,
-    ErrorReturn, FavouriteDay, FavouriteDayReadAllReturn, FavouriteDayReadOne, FavouriteDayReturn,
-    FavouriteDayUpdate, Goal, GoalDone, GoalUpdateReturn, IsSuccessful, LoginChatUsers,
-    MessageResponse, SearchGoal, SuccessReadOne, SuccessReturn, UpdateGoal, UpdateUserPassword,
-    UpdateUsernameOrEmail,
+    ChatUsers, CheckIfGoalExists, CurrentDay, CurrentMonth, CurrentYear, DeleteUserPassword, Diary,
+    DiaryExists, DiaryReturn, ErrorReturn, FavouriteDay, FavouriteDayReadAllReturn,
+    FavouriteDayReadOne, FavouriteDayReturn, FavouriteDayUpdate, Goal, GoalDone, GoalUpdateReturn,
+    IsSuccessful, LoginChatUsers, MessageResponse, MyDate, SearchGoal, SuccessReadOne,
+    SuccessReturn, UpdateGoal, UpdateUserPassword, UpdateUsernameOrEmail,
 };
 use token_generation::generate_token::generate_token;
 use users::{
@@ -38,6 +46,7 @@ use validator::ValidateLength;
 
 pub mod connection;
 pub mod day_of_week;
+pub mod diary;
 pub mod favourite_day;
 pub mod goals;
 pub mod models;
@@ -305,7 +314,7 @@ pub async fn goal_update(data: Json<UpdateGoal>) -> impl Responder {
                 id: 0,
                 username: String::from(""),
                 goal_name: String::from(""),
-                message: format!("Invalid updated field"),
+                message: format!("The data doesn't match the available one to be updated"),
             };
             HttpResponse::Ok().json(return_data)
         }
@@ -323,7 +332,10 @@ pub async fn delete_one_goal(data: Json<Goal>) -> impl Responder {
         Ok(created_data) => {
             println!("Deleted: {created_data:?}");
             let message = MessageResponse {
-                message: format!("Data is cleared"),
+                message: format!(
+                    "{:?} is deleted from the todo table in database",
+                    created_data.goal_name
+                ),
             };
             HttpResponse::Ok().json(message)
         }
@@ -748,6 +760,163 @@ pub async fn fav_day_delete(data: Json<FavouriteDayReadOne>) -> impl Responder {
         }
     }
 }
+
+#[post("/diary_create")]
+pub async fn diary_create(data: Json<Diary>) -> impl Responder {
+    let created_data = Diary {
+        username: data.username.clone(),
+        content: data.content.clone(),
+    };
+    let created_result = create_diary(created_data);
+    match created_result {
+        Ok(created_data) => {
+            let return_data = DiaryReturn {
+                username: created_data.username,
+                content: created_data.content,
+                message: format!("Saved successfully"),
+                success: true,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = DiaryReturn {
+                username: format!(""),
+                content: format!(""),
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/diary_read_one")]
+pub async fn diary_read_one(data: Json<FavouriteDayReadOne>) -> impl Responder {
+    let created_result = read_one_diary_content(data.username.clone());
+    match created_result {
+        Ok(created_data) => {
+            let return_data = DiaryReturn {
+                username: created_data.username,
+                content: created_data.content,
+                message: format!(""),
+                success: true,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = DiaryReturn {
+                username: format!(""),
+                content: format!(""),
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/diary_delete")]
+pub async fn diary_delete(data: Json<FavouriteDayReadOne>) -> impl Responder {
+    let created_result = delete_diary(data.username.clone());
+    match created_result {
+        Ok(created_data) => {
+            let return_data = DiaryReturn {
+                username: created_data.username.clone(),
+                content: created_data.content,
+                message: format!("Deleted diary user:  {}", created_data.username.clone()),
+                success: true,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = DiaryReturn {
+                username: format!(""),
+                content: format!(""),
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[patch("/diary_udpate")]
+pub async fn diary_udpate(data: Json<FavouriteDayUpdate>) -> impl Responder {
+    let updated_data = FavouriteDayUpdate {
+        username: data.username.clone().to_uppercase(),
+        field: data.field.clone(),
+        new_value: data.new_value.clone(),
+    };
+    let created_result = update_diary(
+        updated_data.username,
+        updated_data.field,
+        updated_data.new_value,
+    );
+    match created_result {
+        Some(Ok(created_data)) => {
+            let return_data = DiaryReturn {
+                username: created_data.username.clone(),
+                content: created_data.content,
+                message: format!(
+                    "Diary of username: {} has been updated successfully",
+                    created_data.username.clone()
+                ),
+                success: true,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Some(Err(e)) => {
+            let return_data = DiaryReturn {
+                username: format!(""),
+                content: format!(""),
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        None => {
+            let return_data = DiaryReturn {
+                username: format!(""),
+                content: format!(""),
+                message: format!("Enter a Valid field."),
+                success: false,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/check_if_user_exists")]
+pub async fn check_if_user_exists(data: Json<FavouriteDayReadOne>) -> impl Responder {
+    let created_result = delete_diary(data.username.clone());
+    match created_result {
+        Ok(_) => {
+            let return_data = DiaryExists {
+                exists: true,
+                message: format!("User exists in the diary table"),
+                success: true,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = DiaryExists {
+                exists: false,
+                message: format!("{e:?}"),
+                success: false,
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[get("/date_actual")]
+pub async fn date_actual() -> impl Responder {
+    let date_returned = MyDate {
+        date: date().to_string(),
+    };
+    HttpResponse::Ok().json(date_returned)
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let all_result = read_all_chat_user();
@@ -784,6 +953,19 @@ async fn main() -> std::io::Result<()> {
         }
         Err(e) => println!("{e:?}"),
     }
+    let all_diary = read_all_diary_content();
+    match all_diary {
+        Ok(all_detail) => {
+            println!("\n\nAll data in diary");
+            for x in all_detail {
+                println!("{:?}\n", x);
+            }
+        }
+        Err(e) => {
+            println!("{e:?}")
+        }
+    }
+
     HttpServer::new(|| {
         App::new()
             .wrap(
@@ -822,6 +1004,12 @@ async fn main() -> std::io::Result<()> {
             .service(fav_day_delete)
             .service(check_done_exists)
             .service(check_todo_exists)
+            .service(diary_create)
+            .service(diary_read_one)
+            .service(diary_delete)
+            .service(diary_udpate)
+            .service(check_if_user_exists)
+            .service(date_actual)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

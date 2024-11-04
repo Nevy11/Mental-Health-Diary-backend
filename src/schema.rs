@@ -9,6 +9,13 @@ diesel::table! {
 }
 
 diesel::table! {
+    diary (username) {
+        username -> Varchar,
+        content -> Text,
+    }
+}
+
+diesel::table! {
     favourite_day (username) {
         username -> Varchar,
         day_favourite -> Varchar,
@@ -33,6 +40,7 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     chat_users,
+    diary,
     favourite_day,
     goals_db,
     goals_done,

@@ -17,7 +17,7 @@ pub fn delete_goal(data: Goal) -> Result<Goals, diesel::result::Error> {
     let connection = &mut establish_connection();
     diesel::delete(goals_db::dsl::goals_db)
         .filter(username.eq(deleted_data.username.clone()))
-        .filter(goal_name.eq(deleted_data.goal_name.to_uppercase().clone()))
+        .filter(goal_name.eq(deleted_data.goal_name.clone()))
         .returning(Goals::as_returning())
         .get_result(connection)
 }
