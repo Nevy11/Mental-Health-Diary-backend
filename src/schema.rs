@@ -1,6 +1,15 @@
 // @generated automatically by Diesel CLI.
 
 diesel::table! {
+    ai (id) {
+        id -> Int4,
+        username -> Varchar,
+        question -> Varchar,
+        answer -> Varchar,
+    }
+}
+
+diesel::table! {
     chat_users (username) {
         username -> Varchar,
         userpassword -> Varchar,
@@ -39,6 +48,7 @@ diesel::table! {
 }
 
 diesel::allow_tables_to_appear_in_same_query!(
+    ai,
     chat_users,
     diary,
     favourite_day,

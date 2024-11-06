@@ -232,3 +232,58 @@ pub struct DiaryExists {
 pub struct MyDate {
     pub date: String,
 }
+
+#[derive(Insertable, Deserialize, Debug, Serialize, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::ai)]
+#[diesel(check_for_backend(Pg))]
+pub struct AiReturn {
+    pub id: i32,
+    pub username: String,
+    pub question: String,
+    pub answer: String,
+}
+
+#[derive(Insertable, Deserialize, Debug, Serialize, Queryable, Selectable)]
+#[diesel(table_name = crate::schema::ai)]
+#[diesel(check_for_backend(Pg))]
+pub struct Ai {
+    pub username: String,
+    pub question: String,
+    pub answer: String,
+}
+
+#[derive(Serialize)]
+pub struct ReturnAi {
+    pub username: String,
+    pub question: String,
+    pub answer: String,
+    pub success: bool,
+    pub message: String,
+    pub add_message: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct AiReadOne {
+    pub username: String,
+}
+
+#[derive(Serialize)]
+pub struct ReturnAiReadOne {
+    pub data: Vec<AiReturn>,
+    pub success: bool,
+    pub message: String,
+    pub add_message: String,
+}
+
+#[derive(Deserialize)]
+pub struct UsernameUpdateAi {
+    pub username: String,
+    pub new_value: String,
+}
+
+#[derive(Deserialize)]
+pub struct QAUpdateAi {
+    pub username: String,
+    pub old_value: String,
+    pub new_value: String,
+}

@@ -2,6 +2,12 @@ use actix_cors::Cors;
 use actix_web::{
     delete, get, http, patch, post, web::Json, App, HttpResponse, HttpServer, Responder,
 };
+use ai::{
+    create_ai::create_ai,
+    delete_ai::delete_ai,
+    read_ai::{read_all_ai, read_one_ai},
+    update_ai::{update_answer_ai, update_question_ai, update_username_ai},
+};
 use day_of_week::{
     date::date, day_month::current_day, day_time::current_month, day_year::current_year,
 };
@@ -29,11 +35,12 @@ use goals::{
     update_goal::update_goal,
 };
 use models::{
-    ChatUsers, CheckIfGoalExists, CurrentDay, CurrentMonth, CurrentYear, DeleteUserPassword, Diary,
-    DiaryExists, DiaryReturn, ErrorReturn, FavouriteDay, FavouriteDayReadAllReturn,
-    FavouriteDayReadOne, FavouriteDayReturn, FavouriteDayUpdate, Goal, GoalDone, GoalUpdateReturn,
-    IsSuccessful, LoginChatUsers, MessageResponse, MyDate, SearchGoal, SuccessReadOne,
-    SuccessReturn, UpdateGoal, UpdateUserPassword, UpdateUsernameOrEmail,
+    Ai, AiReadOne, AiReturn, ChatUsers, CheckIfGoalExists, CurrentDay, CurrentMonth, CurrentYear,
+    DeleteUserPassword, Diary, DiaryExists, DiaryReturn, ErrorReturn, FavouriteDay,
+    FavouriteDayReadAllReturn, FavouriteDayReadOne, FavouriteDayReturn, FavouriteDayUpdate, Goal,
+    GoalDone, GoalUpdateReturn, IsSuccessful, LoginChatUsers, MessageResponse, MyDate, QAUpdateAi,
+    ReturnAi, ReturnAiReadOne, SearchGoal, SuccessReadOne, SuccessReturn, UpdateGoal,
+    UpdateUserPassword, UpdateUsernameOrEmail, UsernameUpdateAi,
 };
 use token_generation::generate_token::generate_token;
 use users::{
@@ -44,6 +51,7 @@ use users::{
 };
 use validator::ValidateLength;
 
+pub mod ai;
 pub mod connection;
 pub mod day_of_week;
 pub mod diary;
@@ -917,6 +925,239 @@ pub async fn date_actual() -> impl Responder {
     HttpResponse::Ok().json(date_returned)
 }
 
+#[post("/ai_create")]
+pub async fn ai_create(data: Json<Ai>) -> impl Responder {
+    let data = Ai {
+        username: data.username.clone(),
+        question: data.question.clone(),
+        answer: data.answer.clone(),
+    };
+    let username = data.username.clone();
+    let question = data.question.clone();
+    let answer = data.answer.clone();
+    let created_result = create_ai(data);
+    match created_result {
+        Ok(created_data) => {
+            let return_data = ReturnAi {
+                username: created_data.username,
+                question: created_data.question,
+                answer: created_data.answer,
+                success: true,
+                message: format!(""),
+                add_message: format!("Data is created successfully"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ReturnAi {
+                username: format! {"{}", username.clone()},
+                question: format!("{}", question.clone()),
+                answer: format!("{}", answer.clone()),
+                success: false,
+                message: format!("{e:?}"),
+                add_message: format!("Failed to create username: {}", username.clone()),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/ai_read_one")]
+pub async fn ai_read_one(data: Json<AiReadOne>) -> impl Responder {
+    let username = data.username.clone();
+
+    let one_result = read_one_ai(username);
+    match one_result {
+        Ok(one_data) => {
+            if one_data.length() > Some(0) {
+                let return_data = ReturnAiReadOne {
+                    data: one_data,
+                    success: true,
+                    message: format!("Successfully"),
+                    add_message: format!("Data is read successfully"),
+                };
+                HttpResponse::Ok().json(return_data)
+            } else {
+                let return_data = ReturnAiReadOne {
+                    data: one_data,
+                    success: false,
+                    message: format!("The data is not in the database."),
+                    add_message: format!("The data is not stored."),
+                };
+                HttpResponse::Ok().json(return_data)
+            }
+        }
+        Err(e) => {
+            let mock_data = AiReturn {
+                id: 0,
+                username: format!(""),
+                question: format!(""),
+                answer: format!(""),
+            };
+            let mock_vector = vec![mock_data];
+            let return_data = ReturnAiReadOne {
+                data: mock_vector,
+                success: false,
+                message: format!("{e:?}"),
+                add_message: format!("Failed to read the data"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[post("/ai_delete")]
+pub async fn ai_delete(data: Json<AiReadOne>) -> impl Responder {
+    let username = data.username.clone();
+    if username.length() > Some(0) {
+        let one_result = delete_ai(username);
+        match one_result {
+            Ok(one_data) => {
+                let return_data = ReturnAiReadOne {
+                    data: one_data,
+                    success: true,
+                    message: format!("Successfully"),
+                    add_message: format!("Data is deleted successfully successfully"),
+                };
+                HttpResponse::Ok().json(return_data)
+            }
+            Err(e) => {
+                let mock_data = AiReturn {
+                    id: 0,
+                    username: format!(""),
+                    question: format!(""),
+                    answer: format!(""),
+                };
+                let mock_vector = vec![mock_data];
+                let return_data = ReturnAiReadOne {
+                    data: mock_vector,
+                    success: false,
+                    message: format!("{e:?}"),
+                    add_message: format!("Failed to deleted the data"),
+                };
+                HttpResponse::Ok().json(return_data)
+            }
+        }
+    } else {
+        let mock_data = AiReturn {
+            id: 0,
+            username: format!(""),
+            question: format!(""),
+            answer: format!(""),
+        };
+        let mock_vector = vec![mock_data];
+
+        let return_data = ReturnAiReadOne {
+            data: mock_vector,
+            success: false,
+            message: format!("Username length less than the required length"),
+            add_message: format!("Enter a valid username."),
+        };
+        HttpResponse::Ok().json(return_data)
+    }
+}
+
+#[patch("/ai_username_update")]
+pub async fn ai_username_update(data: Json<UsernameUpdateAi>) -> impl Responder {
+    let username = data.username.clone();
+    let data = UsernameUpdateAi {
+        username: username.clone(),
+        new_value: data.new_value.clone(),
+    };
+
+    let one_result = update_username_ai(data.username, data.new_value);
+    match one_result {
+        Ok(created_data) => {
+            let return_data = ReturnAi {
+                username: created_data.username,
+                question: created_data.question,
+                answer: created_data.answer,
+                success: true,
+                message: format!(""),
+                add_message: format!("Data is created successfully"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ReturnAi {
+                username: format!(""),
+                question: format!("",),
+                answer: format!("",),
+                success: false,
+                message: format!("{e:?}"),
+                add_message: format!("Failed to update username: {}", username.clone()),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[patch("/ai_question_update")]
+pub async fn ai_question_update(data: Json<QAUpdateAi>) -> impl Responder {
+    let one_result = update_question_ai(
+        data.username.clone(),
+        data.old_value.clone(),
+        data.new_value.clone(),
+    );
+    match one_result {
+        Ok(created_data) => {
+            let return_data = ReturnAi {
+                username: created_data.username,
+                question: created_data.question,
+                answer: created_data.answer,
+                success: true,
+                message: format!(""),
+                add_message: format!("Question is updated successfully"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ReturnAi {
+                username: format!(""),
+                question: format!("",),
+                answer: format!("",),
+                success: false,
+                message: format!("{e:?}"),
+                add_message: format!("Error while saving"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
+#[patch("/ai_answer_update")]
+pub async fn ai_answer_update(data: Json<QAUpdateAi>) -> impl Responder {
+    let one_result = update_answer_ai(
+        data.username.clone(),
+        data.old_value.clone(),
+        data.new_value.clone(),
+    );
+    match one_result {
+        Ok(created_data) => {
+            let return_data = ReturnAi {
+                username: created_data.username,
+                question: created_data.question,
+                answer: created_data.answer,
+                success: true,
+                message: format!(""),
+                add_message: format!("Answer is updated successfully"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ReturnAi {
+                username: format!(""),
+                question: format!("",),
+                answer: format!("",),
+                success: false,
+                message: format!("{e:?}"),
+                add_message: format!("Failed to update the answer."),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let all_result = read_all_chat_user();
@@ -966,6 +1207,18 @@ async fn main() -> std::io::Result<()> {
         }
     }
 
+    println!("All Ai components.");
+    let all_ai_components = read_all_ai();
+    match all_ai_components {
+        Ok(created_data) => {
+            for data in created_data {
+                println!("\n{data:?}\n")
+            }
+        }
+        Err(e) => {
+            println!("{e:?}")
+        }
+    }
     HttpServer::new(|| {
         App::new()
             .wrap(
@@ -1010,6 +1263,12 @@ async fn main() -> std::io::Result<()> {
             .service(diary_udpate)
             .service(check_if_user_exists)
             .service(date_actual)
+            .service(ai_answer_update)
+            .service(ai_question_update)
+            .service(ai_username_update)
+            .service(ai_delete)
+            .service(ai_read_one)
+            .service(ai_create)
     })
     .bind(("0.0.0.0", 8080))?
     .run()
