@@ -5,13 +5,18 @@ edition = "2021"
 
 [dependencies]
 actix-cors = "0.7.0"
+actix-multipart = "0.7.2"
 actix-web = "4.9.0"
 aes = "0.8.4"
 bcrypt = "0.15.1"
 block-modes = "0.9.1"
+bytemuck = "1.19.0"
 chrono = { version = "0.4.38", features = ["serde"] }
+coqui-stt = "1.0.2"
 diesel = { version = "2.2.4", features = ["chrono", "postgres"] }
 dotenvy = "0.15.7"
+futures-util = "0.3.31"
+hound = "3.5.1"
 hyper = { version = "1.5.0", features = ["server"] }
 json = "0.12.4"
 jsonwebtoken = "9.3.0"
@@ -21,3 +26,5 @@ serde = { version = "1.0.210", features = ["derive"] }
 serde_json = "1.0.129"
 tokio = { version = "1.40.0", features = ["full"] }
 validator = "0.18.1"
+whisper-rs = "0.13.0"
+

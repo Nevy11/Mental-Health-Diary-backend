@@ -287,3 +287,12 @@ pub struct QAUpdateAi {
     pub old_value: String,
     pub new_value: String,
 }
+
+#[derive(Serialize)]
+pub struct ReturnChatUserReadOne {
+    pub success: bool,
+    pub username: String,
+    pub email: String,
+    pub message: String,
+    pub add_message: String,
+}

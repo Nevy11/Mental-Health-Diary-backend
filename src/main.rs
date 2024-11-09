@@ -1,4 +1,5 @@
 use actix_cors::Cors;
+use actix_multipart::Multipart;
 use actix_web::{
     delete, get, http, patch, post, web::Json, App, HttpResponse, HttpServer, Responder,
 };
@@ -8,6 +9,7 @@ use ai::{
     read_ai::{read_all_ai, read_one_ai},
     update_ai::{update_answer_ai, update_question_ai, update_username_ai},
 };
+use audio_text::{create_audio_text::whisper_transcribe, create_audio_text2::whisper_doc2};
 use day_of_week::{
     date::date, day_month::current_day, day_time::current_month, day_year::current_year,
 };
@@ -22,6 +24,7 @@ use favourite_day::{
     read_all_favourite_day::read_all_favourite_day, read_one_favourite_day::read_one_favourite_day,
     update_favourite_day::update_favourite_day,
 };
+use futures_util::{StreamExt, TryStreamExt};
 use goals::{
     create_goal::create_goal,
     delete_goal::{delete_all_goals, delete_goal},
@@ -39,19 +42,21 @@ use models::{
     DeleteUserPassword, Diary, DiaryExists, DiaryReturn, ErrorReturn, FavouriteDay,
     FavouriteDayReadAllReturn, FavouriteDayReadOne, FavouriteDayReturn, FavouriteDayUpdate, Goal,
     GoalDone, GoalUpdateReturn, IsSuccessful, LoginChatUsers, MessageResponse, MyDate, QAUpdateAi,
-    ReturnAi, ReturnAiReadOne, SearchGoal, SuccessReadOne, SuccessReturn, UpdateGoal,
-    UpdateUserPassword, UpdateUsernameOrEmail, UsernameUpdateAi,
+    ReturnAi, ReturnAiReadOne, ReturnChatUserReadOne, SearchGoal, SuccessReadOne, SuccessReturn,
+    UpdateGoal, UpdateUserPassword, UpdateUsernameOrEmail, UsernameUpdateAi,
 };
+use std::{fs::File, io::Write};
 use token_generation::generate_token::generate_token;
 use users::{
     create_users::create_chat_user,
     delete_users::delete_chat_user,
-    read_users::{check_for_users_password, read_all_chat_user},
+    read_users::{check_for_users_password, read_all_chat_user, read_one_chat_user},
     update_users::update_chat_user,
 };
 use validator::ValidateLength;
 
 pub mod ai;
+pub mod audio_text;
 pub mod connection;
 pub mod day_of_week;
 pub mod diary;
@@ -85,6 +90,32 @@ pub async fn sign_up_user(data: Json<ChatUsers>) -> impl Responder {
     }
 }
 
+#[post("/user_read_one")]
+pub async fn user_read_one(data: Json<AiReadOne>) -> impl Responder {
+    let user_result = read_one_chat_user(data.username.clone());
+    match user_result {
+        Ok(user_data) => {
+            let return_data = ReturnChatUserReadOne {
+                success: true,
+                username: user_data.username,
+                email: user_data.email,
+                message: "Successfully read one".to_string(),
+                add_message: "The data has been fetched successfully".to_string(),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+        Err(e) => {
+            let return_data = ReturnChatUserReadOne {
+                success: false,
+                username: format!("Err"),
+                email: format!("Error"),
+                message: format!("{e:?}"),
+                add_message: format!("Failed to read the user data"),
+            };
+            HttpResponse::Ok().json(return_data)
+        }
+    }
+}
 #[post("/login_user")]
 pub async fn login_user(data: Json<LoginChatUsers>) -> impl Responder {
     let login_result = check_for_users_password(data.username.clone(), data.userpassword.clone());
@@ -1158,6 +1189,39 @@ pub async fn ai_answer_update(data: Json<QAUpdateAi>) -> impl Responder {
     }
 }
 
+#[post("/upload_audio")]
+async fn upload_audio(mut payload: Multipart) -> impl Responder {
+    while let Ok(Some(mut field)) = payload.try_next().await {
+        // Extract content_disposition before the loop
+        let content_disposition = field.content_disposition().cloned();
+
+        if let Some(content_disposition) = content_disposition {
+            if let Some(filename) = content_disposition.get_filename() {
+                let filepath = format!("./uploads/{}", filename);
+                let mut f = match File::create(filepath) {
+                    Ok(file) => file,
+                    Err(e) => return format!("Failed to create file: {}", e),
+                };
+
+                while let Some(chunk) = field.next().await {
+                    match chunk {
+                        Ok(data) => {
+                            if let Err(e) = f.write_all(&data) {
+                                return format!("Failed to write data to file: {}", e);
+                            }
+                        }
+                        Err(e) => return format!("Error while reading chunk: {}", e),
+                    }
+                }
+
+                return format!("File uploaded successfully: {}", filename);
+            }
+        }
+    }
+
+    "No file uploaded".to_string()
+}
+
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
     let all_result = read_all_chat_user();
@@ -1219,6 +1283,17 @@ async fn main() -> std::io::Result<()> {
             println!("{e:?}")
         }
     }
+    println!("Works");
+    match whisper_transcribe() {
+        Ok(text) => {
+            println!("Transcription: {}", text)
+        }
+        Err(e) => {
+            eprintln!("Failed to transcribe audio, error code: {}", e)
+        }
+    }
+
+    println!("Done Transcribing");
     HttpServer::new(|| {
         App::new()
             .wrap(
@@ -1233,6 +1308,7 @@ async fn main() -> std::io::Result<()> {
                     .max_age(3600),
             )
             .service(sign_up_user)
+            .service(user_read_one)
             .service(login_user)
             .service(update_user_password)
             .service(update_email_or_username)
@@ -1269,6 +1345,7 @@ async fn main() -> std::io::Result<()> {
             .service(ai_delete)
             .service(ai_read_one)
             .service(ai_create)
+            .service(upload_audio)
     })
     .bind(("0.0.0.0", 8080))?
     .run()
