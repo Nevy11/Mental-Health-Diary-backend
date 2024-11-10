@@ -7,6 +7,12 @@ use std::io::Write;
 use std::process::Command;
 use std::str;
 
+/// This function saves the audio in the target folder because rust actix server
+/// does not restart the server{doesn't check the file}.
+/// Takes in a stream of data as a Multipart, then loops over every stream of data
+/// until it is None. Creates a new file `target/uploads/audio.wav` and if there is,
+/// it updates the data.
+/// The function then calls convert wav function.
 pub async fn save_audio(mut payload: Multipart) -> std::io::Result<String> {
     let mut file_path = String::new();
 
@@ -40,6 +46,11 @@ pub async fn save_audio(mut payload: Multipart) -> std::io::Result<String> {
 
     Ok(file_path)
 }
+
+/// This is our whisper model.
+/// takes in the converted wav file, and the path to model, and after a number of
+/// parameters and initialization, decodes the audio to text returning a result of
+/// the transcribed text
 pub fn whisper_transcribe_medium2() -> Result<String, Box<dyn std::error::Error>> {
     use hound;
     use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
@@ -71,6 +82,9 @@ pub fn whisper_transcribe_medium2() -> Result<String, Box<dyn std::error::Error>
     Ok(transcription)
 }
 
+/// This function converts the stored audio.wav file to output_audio_code_convertor.wav
+/// file format in the target/uploads/ folder.
+/// uses std::io::Command to use os apis.
 pub fn wav_convert_file() -> Result<String, Box<dyn std::error::Error>> {
     let output = Command::new("ffmpeg")
         .args([

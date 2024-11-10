@@ -929,7 +929,7 @@ pub async fn diary_udpate(data: Json<FavouriteDayUpdate>) -> impl Responder {
 
 #[post("/check_if_user_exists")]
 pub async fn check_if_user_exists(data: Json<FavouriteDayReadOne>) -> impl Responder {
-    let created_result = delete_diary(data.username.clone());
+    let created_result = read_one_diary_content(data.username.clone());
     match created_result {
         Ok(_) => {
             let return_data = DiaryExists {
