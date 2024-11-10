@@ -1,3 +1,4 @@
+use crate::audio_text::memory_wav::{convert_to_wav_in_memory, transcribe_audio_from_memory};
 use actix_cors::Cors;
 use actix_multipart::Multipart;
 use actix_web::{
@@ -6,17 +7,19 @@ use actix_web::{
 use ai::{
     create_ai::create_ai,
     delete_ai::delete_ai,
-    read_ai::{read_all_ai, read_one_ai},
+    read_ai::read_one_ai,
     update_ai::{update_answer_ai, update_question_ai, update_username_ai},
 };
-use audio_text::{create_audio_text::whisper_transcribe, create_audio_text2::whisper_doc2};
+use audio_text::{
+    whisper_doc::whisper_transcribe_medium,
+    whisper_mod_2::{save_audio, wav_convert_file, whisper_transcribe_medium2},
+};
 use day_of_week::{
     date::date, day_month::current_day, day_time::current_month, day_year::current_year,
 };
+
 use diary::{
-    create_diary::create_diary,
-    delete_diary::delete_diary,
-    read_diary::{read_all_diary_content, read_one_diary_content},
+    create_diary::create_diary, delete_diary::delete_diary, read_diary::read_one_diary_content,
     update_diary::update_diary,
 };
 use favourite_day::{
@@ -31,10 +34,10 @@ use goals::{
     goals_done::{
         create_done_goal::create_done_goal,
         delete_done_goal::{delete_all_done_goals, delete_done_goal},
-        read_done_goal::{read_all_done_goal, read_one_done_goal},
+        read_done_goal::read_one_done_goal,
         update_done_goal::update_done_goal,
     },
-    read_goal::{read_all_goal, read_one_goal},
+    read_goal::read_one_goal,
     update_goal::update_goal,
 };
 use models::{
@@ -42,15 +45,13 @@ use models::{
     DeleteUserPassword, Diary, DiaryExists, DiaryReturn, ErrorReturn, FavouriteDay,
     FavouriteDayReadAllReturn, FavouriteDayReadOne, FavouriteDayReturn, FavouriteDayUpdate, Goal,
     GoalDone, GoalUpdateReturn, IsSuccessful, LoginChatUsers, MessageResponse, MyDate, QAUpdateAi,
-    ReturnAi, ReturnAiReadOne, ReturnChatUserReadOne, SearchGoal, SuccessReadOne, SuccessReturn,
-    UpdateGoal, UpdateUserPassword, UpdateUsernameOrEmail, UsernameUpdateAi,
+    ReturnAi, ReturnAiReadOne, ReturnAudioData, ReturnChatUserReadOne, SearchGoal, SuccessReadOne,
+    SuccessReturn, UpdateGoal, UpdateUserPassword, UpdateUsernameOrEmail, UsernameUpdateAi,
 };
-use std::{fs::File, io::Write};
-use token_generation::generate_token::generate_token;
 use users::{
     create_users::create_chat_user,
     delete_users::delete_chat_user,
-    read_users::{check_for_users_password, read_all_chat_user, read_one_chat_user},
+    read_users::{check_for_users_password, read_one_chat_user},
     update_users::update_chat_user,
 };
 use validator::ValidateLength;
@@ -116,6 +117,7 @@ pub async fn user_read_one(data: Json<AiReadOne>) -> impl Responder {
         }
     }
 }
+
 #[post("/login_user")]
 pub async fn login_user(data: Json<LoginChatUsers>) -> impl Responder {
     let login_result = check_for_users_password(data.username.clone(), data.userpassword.clone());
@@ -1191,100 +1193,92 @@ pub async fn ai_answer_update(data: Json<QAUpdateAi>) -> impl Responder {
 
 #[post("/upload_audio")]
 async fn upload_audio(mut payload: Multipart) -> impl Responder {
+    let mut audio_data: Vec<u8> = Vec::new();
+
     while let Ok(Some(mut field)) = payload.try_next().await {
-        // Extract content_disposition before the loop
-        let content_disposition = field.content_disposition().cloned();
-
-        if let Some(content_disposition) = content_disposition {
-            if let Some(filename) = content_disposition.get_filename() {
-                let filepath = format!("./uploads/{}", filename);
-                let mut f = match File::create(filepath) {
-                    Ok(file) => file,
-                    Err(e) => return format!("Failed to create file: {}", e),
-                };
-
-                while let Some(chunk) = field.next().await {
-                    match chunk {
-                        Ok(data) => {
-                            if let Err(e) = f.write_all(&data) {
-                                return format!("Failed to write data to file: {}", e);
-                            }
-                        }
-                        Err(e) => return format!("Error while reading chunk: {}", e),
-                    }
+        while let Some(chunk) = field.next().await {
+            match chunk {
+                Ok(data) => audio_data.extend_from_slice(&data),
+                Err(e) => {
+                    return HttpResponse::InternalServerError().json(ReturnAudioData {
+                        success: false,
+                        message: format!("Error reading chunk: {}", e),
+                    });
                 }
-
-                return format!("File uploaded successfully: {}", filename);
             }
         }
     }
 
-    "No file uploaded".to_string()
+    // Convert directly to WAV format in memory
+    let mut wav_data = Vec::new();
+    if let Err(e) = convert_to_wav_in_memory(audio_data, &mut wav_data) {
+        return HttpResponse::InternalServerError().json(ReturnAudioData {
+            success: false,
+            message: format!("Failed to convert audio: {}", e),
+        });
+    }
+
+    // Transcribe the audio data in memory
+    match transcribe_audio_from_memory(&wav_data) {
+        Ok(transcription) => HttpResponse::Ok().json(ReturnAudioData {
+            success: true,
+            message: transcription,
+        }),
+        Err(e) => HttpResponse::InternalServerError().json(ReturnAudioData {
+            success: false,
+            message: format!("Transcription failed: {}", e),
+        }),
+    }
+}
+
+#[post("/transcribe")]
+async fn transcribe_audio(payload: Multipart) -> impl Responder {
+    match save_audio(payload).await {
+        Ok(file_path) => {
+            println!("File is saved at: {}", file_path);
+            let file_result = wav_convert_file();
+            match file_result {
+                Ok(path_of_file) => {
+                    println!("File is converted at: {}", path_of_file);
+                    match whisper_transcribe_medium2() {
+                        Ok(transcription) => {
+                            let data_returned: ReturnAudioData = ReturnAudioData {
+                                success: true,
+                                message: transcription,
+                            };
+                            HttpResponse::Ok().json(data_returned)
+                        }
+                        Err(e) => {
+                            let data_returned = ReturnAudioData {
+                                success: false,
+                                message: format!("Transcription failed: {}", e),
+                            };
+                            HttpResponse::InternalServerError().json(data_returned)
+                        }
+                    }
+                }
+                Err(e) => {
+                    let data_returned = ReturnAudioData {
+                        success: false,
+                        message: format!("Convertion failed: {}", e),
+                    };
+                    HttpResponse::InternalServerError().json(data_returned)
+                }
+            }
+        }
+        Err(e) => {
+            let data_returned = ReturnAudioData {
+                success: false,
+                message: format!("File upload failed: {}", e),
+            };
+            HttpResponse::InternalServerError().json(data_returned)
+        }
+    }
 }
 
 #[tokio::main]
 async fn main() -> std::io::Result<()> {
-    let all_result = read_all_chat_user();
-    match all_result {
-        Ok(result) => {
-            println!("{result:?}");
-        }
-        Err(e) => {
-            println!("{e:?}")
-        }
-    }
-    println!("Separator: \n\n");
-    let all_result_goals = read_all_goal();
-    match all_result_goals {
-        Ok(result_data) => println!("{result_data:?}"),
-        Err(e) => println!("Error: {e:?}"),
-    }
-    match generate_token("user123") {
-        Ok(token) => println!("Generated Token: {}", token),
-        Err(e) => println!("Error: {e:?}"),
-    }
-
-    println!("\n\n Done goals: \n");
-    let done_goals = read_all_done_goal();
-    match done_goals {
-        Ok(done_goals_vec) => println!("{:?}", done_goals_vec),
-        Err(e) => println!("{e:?}"),
-    }
-    let all_fav_days = read_all_favourite_day();
-    match all_fav_days {
-        Ok(all_data) => {
-            println!("All Favourite days: \n");
-            println!("\n{all_data:?}")
-        }
-        Err(e) => println!("{e:?}"),
-    }
-    let all_diary = read_all_diary_content();
-    match all_diary {
-        Ok(all_detail) => {
-            println!("\n\nAll data in diary");
-            for x in all_detail {
-                println!("{:?}\n", x);
-            }
-        }
-        Err(e) => {
-            println!("{e:?}")
-        }
-    }
-
-    println!("All Ai components.");
-    let all_ai_components = read_all_ai();
-    match all_ai_components {
-        Ok(created_data) => {
-            for data in created_data {
-                println!("\n{data:?}\n")
-            }
-        }
-        Err(e) => {
-            println!("{e:?}")
-        }
-    }
-    println!("Works");
-    match whisper_transcribe() {
+    match whisper_transcribe_medium() {
         Ok(text) => {
             println!("Transcription: {}", text)
         }
@@ -1292,7 +1286,6 @@ async fn main() -> std::io::Result<()> {
             eprintln!("Failed to transcribe audio, error code: {}", e)
         }
     }
-
     println!("Done Transcribing");
     HttpServer::new(|| {
         App::new()
@@ -1346,6 +1339,7 @@ async fn main() -> std::io::Result<()> {
             .service(ai_read_one)
             .service(ai_create)
             .service(upload_audio)
+            .service(transcribe_audio)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

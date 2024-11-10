@@ -296,3 +296,9 @@ pub struct ReturnChatUserReadOne {
     pub message: String,
     pub add_message: String,
 }
+
+#[derive(Serialize)]
+pub struct ReturnAudioData {
+    pub success: bool,
+    pub message: String,
+}
