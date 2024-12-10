@@ -3,3 +3,10 @@ src/roberta_model
 add-download.rs
 src/audio_text/uploads
 output.wav
+ai_model
+cracked.json
+hs
+dataset squad v2
+distilbert-base-uncased-onnx
+onx_model
+robertaModel

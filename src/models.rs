@@ -1,6 +1,5 @@
 use diesel::{pg::Pg, prelude::*};
 use serde::{Deserialize, Serialize};
-
 #[derive(Deserialize, Serialize)]
 pub struct QuestionAnswer {
     pub username: String,
@@ -301,4 +300,87 @@ pub struct ReturnChatUserReadOne {
 pub struct ReturnAudioData {
     pub success: bool,
     pub message: String,
+}
+
+#[derive(Queryable, Insertable, Selectable, Deserialize)]
+#[diesel(table_name = crate::schema::questions)]
+#[diesel(check_for_backend(Pg))]
+pub struct Question {
+    pub question: String,
+    pub context: String,
+}
+#[derive(Queryable, Insertable, Deserialize, Selectable)]
+#[diesel(table_name = crate::schema::search_results)]
+#[diesel(check_for_backend(Pg))]
+pub struct SearchResult {
+    pub title: String,
+    pub link: String,
+    pub snippet: Option<String>,
+}
+
+#[derive(Deserialize)]
+pub struct APIResult {
+    pub items: Vec<Item>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Item {
+    pub title: String,
+    pub link: String,
+    pub snippet: String,
+}
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    pub question: String,
+}
+
+#[derive(Serialize)]
+pub struct ReturnSearchQuery {
+    pub success: bool,
+    pub message: String,
+    pub question: String,
+    pub answer: String,
+}
+
+#[derive(Queryable, Insertable, Deserialize, Selectable, Serialize, Debug)]
+#[diesel(table_name = crate::schema::questions)]
+#[diesel(check_for_backend(Pg))]
+pub struct QuestionReturning {
+    pub id: i32,
+    pub question: String,
+    pub context: String,
+}
+
+#[derive(Deserialize)]
+pub struct QuestionDelete {
+    pub question: String,
+}
+
+#[derive(Serialize)]
+pub struct ReturnQuestion {
+    pub success: bool,
+    pub message: String,
+    pub id: i32,
+    pub question: String,
+    pub context: String,
+}
+
+#[derive(Serialize)]
+pub struct OneQuestionReturn {
+    pub success: bool,
+    pub message: String,
+    pub data: Vec<QuestionReturning>,
+}
+
+#[derive(Deserialize)]
+pub struct QuestionUpdate {
+    pub old_question: String,
+    pub new_question: String,
+}
+
+#[derive(Deserialize)]
+pub struct ContextUpdate {
+    pub old_context: String,
+    pub new_context: String,
 }

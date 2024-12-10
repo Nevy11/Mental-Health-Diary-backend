@@ -1,4 +1,3 @@
-use crate::audio_text::memory_wav::{convert_to_wav_in_memory, transcribe_audio_from_memory};
 use actix_cors::Cors;
 use actix_multipart::Multipart;
 use actix_web::{
@@ -7,13 +6,16 @@ use actix_web::{
 use ai::{
     create_ai::create_ai,
     delete_ai::delete_ai,
+    question_database::{
+        create_question::create_question,
+        delete_question::delete_question,
+        read_question::read_one_question,
+        update_question::{update_context, update_question},
+    },
     read_ai::read_one_ai,
     update_ai::{update_answer_ai, update_question_ai, update_username_ai},
 };
-use audio_text::{
-    whisper_doc::whisper_transcribe_medium,
-    whisper_mod_2::{save_audio, wav_convert_file, whisper_transcribe_medium2},
-};
+use audio_text::whisper_mod_2::{save_audio, wav_convert_file, whisper_transcribe_medium2};
 use day_of_week::{
     date::date, day_month::current_day, day_time::current_month, day_year::current_year,
 };
@@ -27,7 +29,7 @@ use favourite_day::{
     read_all_favourite_day::read_all_favourite_day, read_one_favourite_day::read_one_favourite_day,
     update_favourite_day::update_favourite_day,
 };
-use futures_util::{StreamExt, TryStreamExt};
+use fetch_data::{google_question::google_question, narrowed_mhd::narrowed_mhd_q};
 use goals::{
     create_goal::create_goal,
     delete_goal::{delete_all_goals, delete_goal},
@@ -41,12 +43,14 @@ use goals::{
     update_goal::update_goal,
 };
 use models::{
-    Ai, AiReadOne, AiReturn, ChatUsers, CheckIfGoalExists, CurrentDay, CurrentMonth, CurrentYear,
-    DeleteUserPassword, Diary, DiaryExists, DiaryReturn, ErrorReturn, FavouriteDay,
+    Ai, AiReadOne, AiReturn, ChatUsers, CheckIfGoalExists, ContextUpdate, CurrentDay, CurrentMonth,
+    CurrentYear, DeleteUserPassword, Diary, DiaryExists, DiaryReturn, ErrorReturn, FavouriteDay,
     FavouriteDayReadAllReturn, FavouriteDayReadOne, FavouriteDayReturn, FavouriteDayUpdate, Goal,
-    GoalDone, GoalUpdateReturn, IsSuccessful, LoginChatUsers, MessageResponse, MyDate, QAUpdateAi,
-    ReturnAi, ReturnAiReadOne, ReturnAudioData, ReturnChatUserReadOne, SearchGoal, SuccessReadOne,
-    SuccessReturn, UpdateGoal, UpdateUserPassword, UpdateUsernameOrEmail, UsernameUpdateAi,
+    GoalDone, GoalUpdateReturn, IsSuccessful, LoginChatUsers, MessageResponse, MyDate,
+    OneQuestionReturn, QAUpdateAi, Question, QuestionDelete, QuestionUpdate, ReturnAi,
+    ReturnAiReadOne, ReturnAudioData, ReturnChatUserReadOne, ReturnQuestion, ReturnSearchQuery,
+    SearchGoal, SuccessReadOne, SuccessReturn, UpdateGoal, UpdateUserPassword,
+    UpdateUsernameOrEmail, UsernameUpdateAi,
 };
 use users::{
     create_users::create_chat_user,
@@ -62,8 +66,10 @@ pub mod connection;
 pub mod day_of_week;
 pub mod diary;
 pub mod favourite_day;
+pub mod fetch_data;
 pub mod goals;
 pub mod models;
+pub mod parquet_data;
 pub mod roberta_model;
 pub mod schema;
 pub mod token_generation;
@@ -881,7 +887,7 @@ pub async fn diary_delete(data: Json<FavouriteDayReadOne>) -> impl Responder {
     }
 }
 
-#[patch("/diary_udpate")]
+#[patch("/diary_update")]
 pub async fn diary_udpate(data: Json<FavouriteDayUpdate>) -> impl Responder {
     let updated_data = FavouriteDayUpdate {
         username: data.username.clone().to_uppercase(),
@@ -895,6 +901,7 @@ pub async fn diary_udpate(data: Json<FavouriteDayUpdate>) -> impl Responder {
     );
     match created_result {
         Some(Ok(created_data)) => {
+            println!("{:?}", created_data);
             let return_data = DiaryReturn {
                 username: created_data.username.clone(),
                 content: created_data.content,
@@ -1191,46 +1198,6 @@ pub async fn ai_answer_update(data: Json<QAUpdateAi>) -> impl Responder {
     }
 }
 
-#[post("/upload_audio")]
-async fn upload_audio(mut payload: Multipart) -> impl Responder {
-    let mut audio_data: Vec<u8> = Vec::new();
-
-    while let Ok(Some(mut field)) = payload.try_next().await {
-        while let Some(chunk) = field.next().await {
-            match chunk {
-                Ok(data) => audio_data.extend_from_slice(&data),
-                Err(e) => {
-                    return HttpResponse::InternalServerError().json(ReturnAudioData {
-                        success: false,
-                        message: format!("Error reading chunk: {}", e),
-                    });
-                }
-            }
-        }
-    }
-
-    // Convert directly to WAV format in memory
-    let mut wav_data = Vec::new();
-    if let Err(e) = convert_to_wav_in_memory(audio_data, &mut wav_data) {
-        return HttpResponse::InternalServerError().json(ReturnAudioData {
-            success: false,
-            message: format!("Failed to convert audio: {}", e),
-        });
-    }
-
-    // Transcribe the audio data in memory
-    match transcribe_audio_from_memory(&wav_data) {
-        Ok(transcription) => HttpResponse::Ok().json(ReturnAudioData {
-            success: true,
-            message: transcription,
-        }),
-        Err(e) => HttpResponse::InternalServerError().json(ReturnAudioData {
-            success: false,
-            message: format!("Transcription failed: {}", e),
-        }),
-    }
-}
-
 #[post("/transcribe")]
 async fn transcribe_audio(payload: Multipart) -> impl Responder {
     match save_audio(payload).await {
@@ -1276,17 +1243,304 @@ async fn transcribe_audio(payload: Multipart) -> impl Responder {
     }
 }
 
-#[tokio::main]
-async fn main() -> std::io::Result<()> {
-    match whisper_transcribe_medium() {
-        Ok(text) => {
-            println!("Transcription: {}", text)
+#[post("/query")]
+pub async fn query_model(data: Json<QuestionDelete>) -> impl Responder {
+    let search_data = QuestionDelete {
+        question: data.question.clone(),
+    };
+
+    match read_one_question(search_data) {
+        Ok(user_data) => {
+            if user_data.length().unwrap() > 0 {
+                let single_data = &user_data[0];
+                let return_result = ReturnQuestion {
+                    success: true,
+                    message: "Data is in database".to_string(),
+                    id: single_data.id,
+                    question: single_data.question.clone(),
+                    context: single_data.context.clone(),
+                };
+                HttpResponse::Ok().json(return_result)
+            } else {
+                match narrowed_mhd_q(data.question.clone()).await {
+                    Some(answer_narrowed) => {
+                        if answer_narrowed.length().unwrap() > 1 {
+                            let data_created = Question {
+                                question: data.question.clone(),
+                                context: answer_narrowed.clone(),
+                            };
+                            match create_question(data_created) {
+                                Ok(answer_from_google) => {
+                                    let return_result = ReturnQuestion {
+                                        success: true,
+                                        message: "Data is in database".to_string(),
+                                        id: answer_from_google.id,
+                                        question: answer_from_google.question.clone(),
+                                        context: answer_from_google.context.clone(),
+                                    };
+                                    HttpResponse::Ok().json(return_result)
+                                }
+                                Err(e) => {
+                                    eprintln!("Error: {e:?}");
+                                    let return_result = ReturnQuestion {
+                                        success: false,
+                                        message: format!("Error: {e:?}"),
+                                        id: 0,
+                                        question: String::from(""),
+                                        context: String::from(""),
+                                    };
+                                    HttpResponse::Ok().json(return_result)
+                                }
+                            }
+                        } else {
+                            match google_question(data.question.clone()).await {
+                                Some(context_from_google) => {
+                                    let data_created = Question {
+                                        question: data.question.clone(),
+                                        context: context_from_google.clone(),
+                                    };
+                                    match create_question(data_created) {
+                                        Ok(answer_from_google) => {
+                                            let return_result = ReturnQuestion {
+                                                success: true,
+                                                message: "Data is in database".to_string(),
+                                                id: answer_from_google.id,
+                                                question: answer_from_google.question.clone(),
+                                                context: answer_from_google.context.clone(),
+                                            };
+                                            HttpResponse::Ok().json(return_result)
+                                        }
+                                        Err(e) => {
+                                            eprintln!("Error: {e:?}");
+                                            let return_result = ReturnQuestion {
+                                                success: false,
+                                                message: format!("Error: {e:?}"),
+                                                id: 0,
+                                                question: String::from(""),
+                                                context: String::from(""),
+                                            };
+                                            HttpResponse::Ok().json(return_result)
+                                        }
+                                    }
+                                }
+                                None => {
+                                    let return_result = ReturnSearchQuery {
+                                        success: false,
+                                        message: "Error".to_string(),
+                                        question: "".to_string(),
+                                        answer: "".to_string(),
+                                    };
+                                    HttpResponse::Ok().json(return_result)
+                                }
+                            }
+                        }
+                    }
+                    None => match google_question(data.question.clone()).await {
+                        Some(context_from_google) => {
+                            let data_created = Question {
+                                question: data.question.clone(),
+                                context: context_from_google.clone(),
+                            };
+                            match create_question(data_created) {
+                                Ok(answer_from_google) => {
+                                    let return_result = ReturnQuestion {
+                                        success: true,
+                                        message: "Data is in database".to_string(),
+                                        id: answer_from_google.id,
+                                        question: answer_from_google.question.clone(),
+                                        context: answer_from_google.context.clone(),
+                                    };
+                                    HttpResponse::Ok().json(return_result)
+                                }
+                                Err(e) => {
+                                    eprintln!("Error: {e:?}");
+                                    let return_result = ReturnQuestion {
+                                        success: false,
+                                        message: format!("Error: {e:?}"),
+                                        id: 0,
+                                        question: String::from(""),
+                                        context: String::from(""),
+                                    };
+                                    HttpResponse::Ok().json(return_result)
+                                }
+                            }
+                        }
+                        None => {
+                            let return_result = ReturnSearchQuery {
+                                success: false,
+                                message: "Error".to_string(),
+                                question: "".to_string(),
+                                answer: "".to_string(),
+                            };
+                            HttpResponse::Ok().json(return_result)
+                        }
+                    },
+                }
+            }
         }
         Err(e) => {
-            eprintln!("Failed to transcribe audio, error code: {}", e)
+            eprintln!("Error:\n{e:?}");
+            let return_result = ReturnSearchQuery {
+                success: false,
+                message: format!("Error:\n{e:?}"),
+                question: "".to_string(),
+                answer: "".to_string(),
+            };
+            HttpResponse::Ok().json(return_result)
         }
     }
-    println!("Done Transcribing");
+}
+
+#[post("/create_question_db")]
+pub async fn create_question_db(data: Json<Question>) -> impl Responder {
+    let created_data = Question {
+        question: data.question.clone(),
+        context: data.context.clone(),
+    };
+
+    match create_question(created_data) {
+        Ok(data_created) => {
+            let return_result = ReturnQuestion {
+                success: true,
+                message: "success".to_string(),
+                id: data_created.id,
+                question: data_created.question,
+                context: data_created.context,
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+        Err(e) => {
+            let return_result = ReturnQuestion {
+                success: false,
+                message: format!("Failed\n Error: {e:?}"),
+                id: 0,
+                question: "".to_string(),
+                context: "".to_string(),
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+    }
+}
+
+#[post("/read_question_db")]
+pub async fn read_question_db(data: Json<QuestionDelete>) -> impl Responder {
+    let search_data = QuestionDelete {
+        question: data.question.clone(),
+    };
+
+    match read_one_question(search_data) {
+        Ok(data_created) => {
+            let return_result = OneQuestionReturn {
+                success: true,
+                message: "success".to_string(),
+                data: data_created,
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+        Err(e) => {
+            let return_result = OneQuestionReturn {
+                success: false,
+                message: format!("Failed:\nError: {e:?}"),
+                data: vec![],
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+    }
+}
+
+#[post("/update_question_db")]
+pub async fn update_question_db(data: Json<QuestionUpdate>) -> impl Responder {
+    let updated_data = QuestionUpdate {
+        old_question: data.old_question.clone(),
+        new_question: data.new_question.clone(),
+    };
+
+    match update_question(updated_data.old_question, updated_data.new_question) {
+        Ok(data_created) => {
+            let return_result = ReturnQuestion {
+                success: true,
+                message: "success".to_string(),
+                id: data_created.id,
+                question: data_created.question,
+                context: data_created.context,
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+        Err(e) => {
+            let return_result = ReturnQuestion {
+                success: false,
+                message: format!("Failed\n Error: {e:?}"),
+                id: 0,
+                question: "".to_string(),
+                context: "".to_string(),
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+    }
+}
+
+#[post("/update_context_db")]
+pub async fn update_context_db(data: Json<ContextUpdate>) -> impl Responder {
+    let updated_data = ContextUpdate {
+        old_context: data.old_context.clone(),
+        new_context: data.new_context.clone(),
+    };
+
+    match update_context(updated_data.old_context, updated_data.new_context) {
+        Ok(data_created) => {
+            let return_result = ReturnQuestion {
+                success: true,
+                message: "success".to_string(),
+                id: data_created.id,
+                question: data_created.question,
+                context: data_created.context,
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+        Err(e) => {
+            let return_result = ReturnQuestion {
+                success: false,
+                message: format!("Failed\n Error: {e:?}"),
+                id: 0,
+                question: "".to_string(),
+                context: "".to_string(),
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+    }
+}
+#[post("/delete_question_db")]
+pub async fn delete_question_db(data: Json<QuestionDelete>) -> impl Responder {
+    let deleted_data = QuestionDelete {
+        question: data.question.clone(),
+    };
+
+    match delete_question(deleted_data) {
+        Ok(data_created) => {
+            let return_result = ReturnQuestion {
+                success: true,
+                message: "success".to_string(),
+                id: data_created.id,
+                question: data_created.question,
+                context: data_created.context,
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+        Err(e) => {
+            let return_result = ReturnQuestion {
+                success: false,
+                message: format!("Failed\n Error: {e:?}"),
+                id: 0,
+                question: "".to_string(),
+                context: "".to_string(),
+            };
+            HttpResponse::Ok().json(return_result)
+        }
+    }
+}
+
+#[tokio::main]
+async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .wrap(
@@ -1338,8 +1592,13 @@ async fn main() -> std::io::Result<()> {
             .service(ai_delete)
             .service(ai_read_one)
             .service(ai_create)
-            .service(upload_audio)
             .service(transcribe_audio)
+            .service(query_model)
+            .service(delete_question_db)
+            .service(update_context_db)
+            .service(update_question_db)
+            .service(read_question_db)
+            .service(create_question_db)
     })
     .bind(("0.0.0.0", 8080))?
     .run()

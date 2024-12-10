@@ -47,6 +47,23 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    questions (id) {
+        id -> Int4,
+        question -> Varchar,
+        context -> Varchar,
+    }
+}
+
+diesel::table! {
+    search_results (id) {
+        id -> Int4,
+        title -> Text,
+        link -> Text,
+        snippet -> Nullable<Text>,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     ai,
     chat_users,
@@ -54,4 +71,6 @@ diesel::allow_tables_to_appear_in_same_query!(
     favourite_day,
     goals_db,
     goals_done,
+    questions,
+    search_results,
 );
