@@ -1,4 +1,4 @@
-`PROJECT DESCRIPTION`\n
+`PROJECT DESCRIPTION` 
 A server for Mental health diary web application. Build using rust's actix server to enhance perfomance and 
 saving memory. Used for interaction with the front end.
 
