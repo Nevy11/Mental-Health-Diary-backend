@@ -15,3 +15,18 @@ the api returns a json file of:
 {success: true, message: transcribed_message}
 there you have it, you're audio is transcribed :)
 
+`How to use it`
+Make sure you have rust and cargo installed in your machine before you start
+1. clone the repository
+
+       git clone git@github.com:Nevy11/Mental-Health-Diary-backend.git
+2. Enter the folder where you have cloned the repository
+
+         cd Mental-Health-Diary-backend/
+3. build the project using cargo
+   
+       Cargo build
+4. Run the project
+  
+        cargo run
+    
