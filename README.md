@@ -21,6 +21,9 @@ there you have it, you're audio is transcribed :)
 `HOW TO USE IT`
 
 Make sure you have rust and cargo installed in your machine before you start
+1. Install postgresql
+   
+          https://www.postgresql.org/download/
 1. clone the repository
 
        git clone git@github.com:Nevy11/Mental-Health-Diary-backend.git
