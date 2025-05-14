@@ -24,16 +24,19 @@ Make sure you have rust and cargo installed in your machine before you start
 1. Install postgresql
    
           https://www.postgresql.org/download/
-1. clone the repository
+2. Enter this in postgresql 
+
+         ALTER DATABASE chat_application_database REFRESH COLLATION VERSION;
+3. clone the repository
 
        git clone git@github.com:Nevy11/Mental-Health-Diary-backend.git
-2. Enter the folder where you have cloned the repository
+4. Enter the folder where you have cloned the repository
 
          cd Mental-Health-Diary-backend/
-3. build the project using cargo
+5. build the project using cargo
    
        Cargo build
-4. Run the project
+6. Run the project
   
         cargo run
     
