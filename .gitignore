@@ -10,4 +10,4 @@ dataset squad v2
 distilbert-base-uncased-onnx
 onx_model
 robertaModel
-.env
+/.env
