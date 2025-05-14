@@ -1,3 +1,4 @@
+.env
 /target
 src/roberta_model
 add-download.rs
@@ -10,4 +11,3 @@ dataset squad v2
 distilbert-base-uncased-onnx
 onx_model
 robertaModel
-/.env
