@@ -7,7 +7,7 @@ The project is a rust's project, to use it, first install Cargo and rust.
 clone the repository then run cargo run to build and run the project on the server.
 You could link the api's with you're front end.
 
-`Example:`
+`Example:` \n
 to transcribe audio to text:
 "http://0.0.0.0:8080/transcribe"
 add the api endpoint to you're project
